@@ -1,0 +1,14 @@
+project_id = "house-of-wolves"
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+# Supabase CLI settings for the edge functions.
+# Stripe and the door scanner call these functions without a user sign-in; they check their own secrets instead.
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.door-access]
+verify_jwt = false

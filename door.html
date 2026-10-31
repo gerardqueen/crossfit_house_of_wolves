@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#000000">
+<title>House of Wolves · Door scanner</title>
+<script src="config.js"></script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#000;color:#f3f3f1;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center}
+  h1{font-size:clamp(28px,6vw,56px);margin:0;text-transform:uppercase;letter-spacing:.03em}
+  p{margin:0;color:#b6b6bb;font-size:18px;max-width:560px}
+  video{width:min(80vw,480px);aspect-ratio:1;object-fit:cover;border-radius:24px;border:3px solid #26262a;background:#111}
+  input,button{font:inherit;font-size:18px;padding:14px 16px;border-radius:12px;border:1px solid #2d2d32;background:#1b1b1e;color:#f3f3f1}
+  button{background:#f3f3f1;color:#0a0a0b;font-weight:700;cursor:pointer}
+  .res{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center}
+  .res.on{display:flex}
+  .res.ok{background:#16a34a}
+  .res.no{background:#dc2626}
+  .res .big{font-size:clamp(40px,9vw,96px);font-weight:900;text-transform:uppercase}
+  .res .who{font-size:clamp(24px,5vw,48px);font-weight:700}
+  .res .why{font-size:22px;opacity:.9}
+  .foot{position:fixed;bottom:12px;left:0;right:0;text-align:center;color:#555;font-size:13px}
+  .foot a{color:#777}
+  #wedge{position:absolute;opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="wrap" id="setup" style="display:none">
+  <h1>Door scanner setup</h1>
+  <p>Paste the scanner key from Coach &gt; Settings &gt; Door access &gt; Scanner key. You only need to do this once on this tablet.</p>
+  <form id="setupForm" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><input id="key" placeholder="Scanner key" autocomplete="off" style="min-width:280px"><button>Save</button></form>
+</div>
+<div class="wrap" id="scan" style="display:none">
+  <h1>Scan your pass</h1>
+  <p>Open the House of Wolves app, tap <b>Door pass</b>, and hold it up to the camera.</p>
+  <video id="cam" playsinline muted></video>
+  <p id="status"></p>
+  <input id="wedge" autocomplete="off" aria-hidden="true">
+</div>
+<div class="res" id="res"><div class="big" id="resBig"></div><div class="who" id="resWho"></div><div class="why" id="resWhy"></div></div>
+<div class="foot">House of Wolves door scanner · <a href="#" id="reset">reset key</a></div>
+<script>
+(function () {
+  'use strict';
+  const cfg = window.HOW_CONFIG || {};
+  const $ = (id) => document.getElementById(id);
+  const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }, del: (k) => { try { localStorage.removeItem(k); } catch {} } };
+  if (!cfg.supabaseUrl) { document.body.innerHTML = '<div class="wrap"><h1>Not set up</h1><p>Add the Supabase URL and anon key to config.js first.</p></div>'; return; }
+  const endpoint = cfg.supabaseUrl.replace(/\/$/, '') + '/functions/v1/door-access';
+  let busy = false, last = '', lastAt = 0;
+
+  $('reset').onclick = (e) => { e.preventDefault(); store.del('how-door-key'); location.reload(); };
+  $('setupForm').onsubmit = (e) => { e.preventDefault(); const k = $('key').value.trim(); if (k) { store.set('how-door-key', k); location.reload(); } };
+
+  const key = store.get('how-door-key');
+  if (!key) { $('setup').style.display = 'flex'; return; }
+  $('scan').style.display = 'flex';
+
+  // keep the screen on
+  const wake = async () => { try { await navigator.wakeLock?.request('screen'); } catch {} };
+  wake(); document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && wake());
+
+  function beep(ok) {
+    try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(); const g = a.createGain(); o.frequency.value = ok ? 880 : 220; o.connect(g); g.connect(a.destination); g.gain.value = .15; o.start(); o.stop(a.currentTime + (ok ? .15 : .4)); } catch {}
+  }
+  function show(ok, who, why) {
+    $('res').className = 'res on ' + (ok ? 'ok' : 'no');
+    $('resBig').textContent = ok ? 'Welcome' : 'Sorry';
+    $('resWho').textContent = who || '';
+    $('resWhy').textContent = why || '';
+    beep(ok);
+    setTimeout(() => { $('res').className = 'res'; busy = false; }, ok ? 2500 : 3500);
+  }
+  async function verify(token) {
+    token = String(token || '').trim();
+    if (!token || busy) return;
+    if (token === last && Date.now() - lastAt < 5000) return;
+    busy = true; last = token; lastAt = Date.now();
+    try {
+      const r = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: cfg.supabaseAnonKey, 'x-door-key': key }, body: JSON.stringify({ action: 'verify', token }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 403) { show(false, 'Scanner not authorised', 'Check the scanner key'); return; }
+      show(!!j.allowed, j.name || '', j.reason || j.error || '');
+    } catch (e) { show(false, 'No connection', 'Check the tablet’s Wi-Fi'); }
+  }
+
+  // USB / Bluetooth barcode scanners type the code and press Enter
+  const wedge = $('wedge');
+  const focusWedge = () => { if (document.activeElement !== wedge) wedge.focus({ preventScroll: true }); };
+  setInterval(focusWedge, 1500); focusWedge();
+  wedge.addEventListener('keydown', (e) => { if (e.key === 'Enter') { verify(wedge.value); wedge.value = ''; } });
+
+  // camera
+  (async () => {
+    const video = $('cam');
+    try {
+      video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      await video.play();
+    } catch (e) { $('status').textContent = 'Camera not available. A USB or Bluetooth QR scanner still works.'; video.style.display = 'none'; return; }
+    let detect;
+    if ('BarcodeDetector' in window) {
+      const bd = new BarcodeDetector({ formats: ['qr_code'] });
+      detect = async () => { const codes = await bd.detect(video); return codes[0]?.rawValue; };
+    } else {
+      await new Promise((res) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'; s.onload = res; s.onerror = res; document.head.appendChild(s); });
+      const c = document.createElement('canvas'), ctx = c.getContext('2d', { willReadFrequently: true });
+      detect = async () => {
+        if (!window.jsQR || !video.videoWidth) return null;
+        c.width = 480; c.height = Math.round(480 * video.videoHeight / video.videoWidth);
+        ctx.drawImage(video, 0, 0, c.width, c.height);
+        const img = ctx.getImageData(0, 0, c.width, c.height);
+        return window.jsQR(img.data, img.width, img.height)?.data;
+      };
+    }
+    const loop = async () => { if (!busy) { try { const v = await detect(); if (v) await verify(v); } catch {} } setTimeout(loop, 300); };
+    loop();
+  })();
+})();
+</script>
+</body>
+</html>

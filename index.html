@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0b">
 <meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wolves">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<script src="config.js"></script>
+<script>window.HOW_CONFIG=window.HOW_CONFIG||{};window.HOW_LIVE=!!(window.HOW_CONFIG.supabaseUrl&&window.HOW_CONFIG.supabaseAnonKey);</script>
 <title>House of Wolves — Gym App</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,7 +32,7 @@ label.f{display:block;margin:12px 0}
 label.f>span,.lbl{display:block;font-size:11px;color:var(--ink2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.09em;font-weight:700}
 h1,h2,h3{font-family:var(--hf);text-transform:uppercase;letter-spacing:.02em;margin:0;line-height:.95;font-weight:800}
 a{color:inherit}
-header.top{position:sticky;top:0;z-index:30;background:rgba(10,10,11,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:10px 16px;height:58px}
+header.top{padding-top:max(10px,env(safe-area-inset-top));height:calc(58px + env(safe-area-inset-top));position:sticky;top:0;z-index:30;background:rgba(10,10,11,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:10px 16px;height:58px}
 .brand{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}.brand>div{min-width:0}
 .chart svg text{fill:var(--mute);font-size:11px;font-family:var(--bf)}
 @media(max-width:600px){.hide-sm{display:none}}@media(min-width:601px){.show-sm{display:none}}
@@ -173,6 +182,15 @@ table.t tr.click:hover td{background:var(--s2)}
 .heat i.on{background:var(--accent)}
 .heat i.fut{background:transparent;border:1px dashed var(--line)}
 .pv{background:var(--s2);color:var(--ink2);font-size:12px;text-align:center;padding:6px 12px;border-bottom:1px solid var(--line)}
+.auth{max-width:440px;margin:0 auto;padding:max(28px,env(safe-area-inset-top)) 20px 40px}
+.auth .logo{display:flex;align-items:center;gap:12px;margin:10px 0 26px}
+.auth .logo .mark{width:52px;height:52px;font-size:19px;border-radius:14px}
+.auth h1{font-size:44px}
+.pass{text-align:center}
+.pass .qrbox{width:240px;height:240px;margin:12px auto;background:#fff;border-radius:16px;padding:14px;display:grid;place-items:center}
+.pass .qrbox svg,.pass .qrbox img{width:100%;height:100%}
+.pass .ring{height:4px;background:var(--s3);border-radius:2px;overflow:hidden;width:240px;margin:0 auto}
+.pass .ring i{display:block;height:100%;background:var(--accent);transition:width 1s linear}
 .tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);padding:6px 9px;border-radius:8px;font-size:12px;font-weight:600;z-index:95;display:none;white-space:nowrap}
 #toasts{position:fixed;top:68px;left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:8px;width:min(92vw,420px);pointer-events:none}
 .toast{background:var(--ink);color:var(--bg);padding:12px 14px;border-radius:12px;font-weight:600;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:up .2s ease;display:flex;gap:8px;align-items:flex-start}
@@ -271,7 +289,8 @@ const ini=n=>String(n||'?').split(' ').filter(Boolean).map(w=>w[0]).slice(0,2).j
 const uid=()=>Math.random().toString(36).slice(2,9);
 const money=n=>'£'+Number(n).toLocaleString('en-GB',{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2});
 const daysBetween=(a,b)=>Math.round((pd(b)-pd(a))/864e5);
-const plan=id=>PLANS.find(p=>p.id===id)||PLANS[1];
+const NONE_PLAN={id:'none',name:'No membership',price:0,unit:'month',tracks:[],desc:'Choose a membership to start booking.'};
+const plan=id=>PLANS.find(p=>p.id===id)||(window.HOW_LIVE?NONE_PLAN:PLANS[1]);
 const dur=s=>{s=Math.round(s);return Math.floor(s/60)+':'+pad(s%60)};
 function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
@@ -451,6 +470,7 @@ function canBook(m,inst,ignoreTime){
   if(!ignoreTime&&inst.start<new Date())return{ok:false,r:'Started'};
   if(!ignoreTime&&daysBetween(TODAY(),inst.date)>S.cfg.ahead)return{ok:false,r:'Opens '+fmtD(ymd(add(pd(inst.date),-S.cfg.ahead)),{weekday:'short',day:'numeric'})};
   if(m.status==='frozen')return{ok:false,r:'Membership frozen'};
+  if(m.status&&m.status!=='active')return{ok:false,r:m.status==='past_due'?'Payment overdue':m.status==='pending'?'Finish joining first':'No active membership',up:true};
   if(!p.tracks.includes(inst.type))return{ok:false,r:'Not on your plan',up:true};
   if(p.pack){if(m.credits<=0)return{ok:false,r:'No credits left',up:true};if(m.creditsExp<inst.date)return{ok:false,r:'Credits expire first',up:true}}
   if(p.perWeek&&weekUsed(m.id,inst.date,inst.id)>=p.perWeek)return{ok:false,r:p.perWeek+'/week used',up:true};
@@ -566,7 +586,7 @@ function render(){
   $('#app').innerHTML=`
   <header class="top">
     <div class="brand">${markHTML()}<div><b>${esc(S.brand.name)}</b><small>${staff?'Coach & Owner':'CrossFit · Livingston'}</small></div></div>
-    <div class="seg" role="tablist"><button class="${staff?'':'on'}" data-a="role" data-v="member">Member</button><button class="${staff?'on':''}" data-a="role" data-v="staff">Coach</button></div>
+    ${!window.HOW_LIVE||(me()&&me().role&&me().role!=='member')?`<div class="seg" role="tablist"><button class="${staff?'':'on'}" data-a="role" data-v="member">Member</button><button class="${staff?'on':''}" data-a="role" data-v="staff">Coach</button></div>`:''}
   </header>
   ${staff?`<div class="tabs">${STABS.map(([k,l])=>`<button class="${UI.stab===k?'on':''}" data-a="stab" data-v="${k}">${l}</button>`).join('')}</div>
   <div class="shell"><aside class="side">${STABS.map(([k,l])=>`<button class="${UI.stab===k?'on':''}" data-a="stab" data-v="${k}">${l}${k==='leads'&&newLeads?`<span class="badge">${newLeads}</span>`:''}</button>`).join('')}
@@ -591,6 +611,9 @@ function closeSheet(){SH=null;drawSheet()}
 function planChip(m){const p=plan(m.plan);return `<span class="chip">${esc(p.name)}</span>`}
 function usageChip(m){const p=plan(m.plan);
   if(m.status==='frozen')return `<span class="chip warn">Frozen until ${fmtD(m.frozenUntil,{day:'numeric',month:'short'})}</span>`;
+  if(m.status==='pending')return `<span class="chip warn">Finish joining</span>`;
+  if(m.status==='past_due')return `<span class="chip bad">Payment overdue</span>`;
+  if(m.status==='cancelled'||p.id==='none')return `<span class="chip">No active membership</span>`;
   if(p.perWeek){const u=weekUsed(m.id,TODAY());return `<span class="chip ${u>=p.perWeek?'warn':''}">${u} of ${p.perWeek} this week</span>`}
   if(p.pack)return `<span class="chip ${m.credits<=1?'warn':''}">${m.credits} credit${m.credits===1?'':'s'} · exp ${fmtD(m.creditsExp,{day:'numeric',month:'short'})}</span>`;
   return `<span class="chip good">Unlimited${p.og?' + Open Gym':''}</span>`}
@@ -643,8 +666,10 @@ function vToday(){
   if(up.length){const i=up[0];const b=bk(i.id);const mins=(i.start-n)/6e4;const canIn=i.st==='in'&&mins<=30&&mins>=-15&&!b.checked.includes(m.id);
     h+=`<div class="card"><div class="row between"><span class="lbl" style="margin:0">${i.st==='wait'?'Waitlisted':'Next class'}</span><span class="chip ${i.st==='wait'?'warn':''}">${i.st==='wait'?'#'+i.pos+' on waitlist':mins<60&&mins>0?'Starts in '+Math.round(mins)+' min':i.date===TODAY()?'Today':fmtD(i.date)}</span></div>
       <div class="row mt"><div class="grow"><h2 style="font-size:30px">${i.time} · ${TYPES[i.type].name}</h2><div class="muted small" style="margin-top:4px">Coach ${esc(i.coach)} · ${bk(i.id).in.length}/${i.cap} booked</div></div></div>
-      <div class="row mt">${b.checked.includes(m.id)?'<span class="chip good">✓ Checked in</span>':canIn?`<button class="btn p" data-a="checkin" data-v="${i.id}">Check in</button>`:''}<button class="btn sm g" data-a="clsInfo" data-v="${i.id}">Details</button><button class="btn sm danger" data-a="cancel" data-v="${i.id}">${i.st==='wait'?'Leave waitlist':'Cancel'}</button></div>
+      <div class="row mt wrap">${b.checked.includes(m.id)?'<span class="chip good">✓ Checked in</span>':canIn?`<button class="btn p" data-a="checkin" data-v="${i.id}">Check in</button>`:''}<button class="btn sm" data-a="doorPass">Door pass</button><button class="btn sm g" data-a="clsInfo" data-v="${i.id}">Details</button><button class="btn sm danger" data-a="cancel" data-v="${i.id}">${i.st==='wait'?'Leave waitlist':'Cancel'}</button></div>
       ${up.length>1?`<div class="tiny muted mt">+ ${up.length-1} more booked · <a href="#" data-a="tab" data-v="classes">see all</a></div>`:''}</div>`}
+  else if(m.status==='pending'||m.status==='cancelled'||plan(m.plan).id==='none')h+=`<div class="notice warn"><span>🐺</span><div class="grow"><b>Choose your membership</b>Pick a plan and pay securely to start booking classes.</div><button class="btn sm p" data-a="changePlan">Choose</button></div>`;
+  else if(m.status==='past_due')h+=`<div class="notice warn"><span>⚠</span><div class="grow"><b>Payment overdue</b>Update your payment details to keep booking.</div><button class="btn sm p" data-a="portal">Update</button></div>`;
   else h+=`<div class="card row between"><div><div class="b">Nothing booked yet</div><div class="muted small">Classes open ${S.cfg.ahead} days ahead.</div></div><button class="btn p" data-a="tab" data-v="classes">Book a class</button></div>`;
   const og=S.og.filter(o=>o.mid===m.id&&o.date===TODAY()&&o.status!=='cancelled'&&o.status!=='done')[0];
   if(og)h+=ogMine(og);
@@ -824,14 +849,16 @@ function vMe(){
    <div class="small ink2" style="margin-top:6px">${esc(p.desc)}</div>
    <div class="row wrap mt" style="gap:6px">${usageChip(m)}${p.monthly?`<span class="chip">Next payment ${fmtD(m.plan==='intro'?introEnd(m):nextBill(m),{day:'numeric',month:'short'})}${m.plan==='intro'?' → Unlimited':''}</span>`:''}</div>
    <div class="row wrap mt"><button class="btn sm" data-a="changePlan">Change plan</button>${p.pack?`<button class="btn sm" data-a="topUp">Buy more credits</button>`:''}${m.status==='frozen'?`<button class="btn sm" data-a="unfreeze" data-v="${m.id}">Unfreeze</button>`:p.monthly?`<button class="btn sm g" data-a="freeze">Freeze</button>`:''}</div></div>`;
-  h+=`<div class="card"><span class="lbl">Payments</span>${payments(m).map(x=>`<div class="lbr"><div class="grow"><div class="b small">${esc(x.desc)}</div><div class="tiny muted">${fmtD(x.d,{day:'numeric',month:'short',year:'numeric'})} · ${x.via}</div></div><span class="b">${money(x.a)}</span><span class="chip good">Paid</span></div>`).join('')}</div>`;
+  h+=`<div class="card"><span class="lbl">Payments</span>${payments(m).length?'':'<div class="muted small">No payments yet.</div>'}${payments(m).map(x=>`<div class="lbr"><div class="grow"><div class="b small">${esc(x.desc)}</div><div class="tiny muted">${fmtD(x.d,{day:'numeric',month:'short',year:'numeric'})} · ${x.via}</div></div><span class="b">${money(x.a)}</span><span class="chip good">Paid</span></div>`).join('')}</div>`;
   h+=`<div class="card"><span class="lbl">Bring a friend</span><div class="row between"><div class="small ink2">Book them a free taster session in CrossFit or Hyrox.</div><button class="btn sm p" data-a="taster">Book taster</button></div></div>`;
   h+=`<div class="card"><span class="lbl">Health & safety on file</span><div class="small"><b>Emergency:</b> ${esc(m.ec.name)} (${esc(m.ec.rel)}) · ${esc(m.ec.phone)}<br><b>Injuries:</b> ${esc(m.injuries||'None noted')}<br><b>Waiver:</b> ${m.waiver?'Signed':'Outstanding'}</div></div>`;
+  h+=`<div class="card"><span class="lbl">Door pass</span><div class="row between"><div class="small ink2">Scan at the door to get in for your class or Open Gym.</div><button class="btn sm p" data-a="doorPass">Show pass</button></div></div>`;
+  if(window.HOW_LIVE&&window.Live){h+=Live.accountCard();return h;}
   h+=`<div class="card" style="border-style:dashed"><span class="lbl">Demo controls</span><label class="f" style="margin-top:4px"><span>View the app as</span><select data-c="switchMe">${S.members.map(x=>`<option value="${x.id}" ${x.id===m.id?'selected':''}>${esc(x.name)} · ${plan(x.plan).name}${x.status==='frozen'?' (frozen)':''}</option>`).join('')}</select></label>
    <div class="row wrap"><button class="btn sm p" data-a="join">New member sign-up</button><button class="btn sm g" data-a="reset">Reset demo data</button></div></div>`;
   return h;
 }
-function payments(m){const p=plan(m.plan);const out=[];
+function payments(m){if(window.HOW_LIVE)return (S.payments||[]);const p=plan(m.plan);const out=[];
   if(p.monthly){let d=pd(m.start);const n=t0();const L=[];while(d<=n){L.push(ymd(d));d=new Date(d.getFullYear(),d.getMonth()+1,Math.min(pd(m.start).getDate(),28))}
     L.slice(-4).reverse().forEach(x=>out.push({d:x,a:x===m.start&&m.plan==='intro'?80:p.price,desc:x===m.start&&m.plan==='intro'?'Introductory Month':p.name,via:'Direct Debit'}))}
   else out.push({d:ymd(add(pd(m.creditsExp),-(p.valid||30))),a:p.price,desc:p.name,via:'Card'});
@@ -859,6 +886,7 @@ function shJoin(){
   if(s===0)b+=PLANS.map(p=>`<label class="opt"><input type="radio" name="plan" value="${p.id}" ${(d.plan||'intro')===p.id?'checked':''}><div><div class="b">${p.name}</div><div class="small muted">${p.desc}</div></div><div class="pr">${money(p.price)}<small>/${p.unit}</small></div></label>`).join('')+`<div class="tiny muted">Done CrossFit before? Skip the intro month and go straight to Unlimited.</div>`;
   if(s===1)b+=`<div class="g-ed"><label class="f"><span>First name</span><input name="first" value="${v('first')}" required autocomplete="given-name"></label><label class="f"><span>Last name</span><input name="last" value="${v('last')}" required autocomplete="family-name"></label></div>
     <div class="g-ed"><label class="f"><span>Email</span><input type="email" name="email" value="${v('email')}" required autocomplete="email"></label><label class="f"><span>Mobile</span><input type="tel" name="phone" value="${v('phone')}" required autocomplete="tel"></label></div>
+    ${window.HOW_LIVE&&!window.HOW_SIGNED_IN?`<label class="f"><span>Create a password</span><input type="password" name="password" minlength="8" required autocomplete="new-password" placeholder="At least 8 characters"></label>`:''}
     <label class="f"><span>Date of birth</span><input type="date" name="dob" value="${v('dob')}" required max="${ymd(add(t0(),-365*16))}"></label>
     <label class="f"><span>Address</span><input name="address" value="${v('address')}" required autocomplete="street-address"></label>
     <div class="g-ed"><label class="f"><span>Town</span><input name="town" value="${v('town')||'Livingston'}" required></label><label class="f"><span>Postcode</span><input name="postcode" value="${v('postcode')}" required autocomplete="postal-code"></label></div>
@@ -871,20 +899,20 @@ function shJoin(){
     <div class="lbl mt2">Goals (pick any)</div><div class="row wrap" style="gap:6px">${['Get stronger','Lose body fat','Hyrox race','Gymnastics skills','Compete','Community','Sport performance','Feel better'].map(g=>`<label class="chip" style="padding:7px 11px;cursor:pointer"><input type="checkbox" name="goals" value="${g}" ${(d.goals||[]).includes(g)?'checked':''} style="width:16px;height:16px"> ${g}</label>`).join('')}</div>
     <div class="lbl mt2">When will you usually train?</div><div class="row wrap" style="gap:6px">${['Early (06:15)','Morning (09:30)','Lunch (12:15)','Evening','Weekends'].map(g=>`<label class="chip" style="padding:7px 11px;cursor:pointer"><input type="checkbox" name="times" value="${g}" ${(d.times||[]).includes(g)?'checked':''} style="width:16px;height:16px"> ${g}</label>`).join('')}</div>`;
   if(s===4)b+=`<div class="card" style="max-height:200px;overflow:auto;font-size:13.5px;line-height:1.5;background:var(--s2)"><b>Participation waiver</b><br>I understand that CrossFit, Hyrox and Open Gym training involve physical exertion and risk of injury. I confirm the health information I've given is accurate and I'll tell a coach about any changes. I'll follow coaches' instructions, only use equipment I've been shown how to use, and I accept responsibility for training within my ability. I understand that the gym will use my details to manage my membership and contact my emergency contact if needed.<br><br><b>Bookings</b><br>Cancel more than ${S.cfg.lateHrs} hours before class for no charge. Later cancellations and no-shows count as a used class.</div>
-    <label class="chk"><input type="checkbox" name="w1" ${d.w1?'checked':''} required> I have read and agree to the participation waiver and booking terms.</label>
+    <label class="chk"><input type="checkbox" name="w1" ${d.w1?'checked':''} required> I have read and agree to the participation waiver, the <a href="terms.html" target="_blank">membership terms</a> and the <a href="privacy.html" target="_blank">privacy notice</a>, including the use of my health answers to keep me safe in training.</label>
     <label class="f"><span>Type your full name to sign</span><input name="sig" value="${v('sig')}" required placeholder="${esc((d.first||'')+' '+(d.last||''))}"></label>
     <label class="chk"><input type="checkbox" name="photo" ${d.photo!==false&&d.photo!=='off'?'checked':''}> Happy to appear in gym photos and social posts.</label>
     <label class="chk"><input type="checkbox" name="mkt" ${d.mkt?'checked':''}> Send me news, events and offers.</label>`;
   if(s===5){const p=plan(d.plan||'intro');b+=`<div class="card" style="background:var(--s2)"><div class="row between"><div class="b">${p.name}</div><span class="sc">${money(p.price)}</span></div><div class="small muted mt">${p.id==='intro'?`Today ${money(80)}, then CFHOW Unlimited ${money(100)}/month from ${fmtD(ymd(add(t0(),30)),{day:'numeric',month:'short'})} unless you choose another plan.`:p.monthly?`Billed monthly on the ${ord(pd(TODAY()).getDate())} of each month.`:'One-off payment.'}</div></div>
-    <div class="lbl mt2">Pay by</div>${(p.monthly?[['dd','Direct Debit','Monthly, via GoCardless'],['card','Card','Via Stripe']]:[['card','Card','Via Stripe'],['cash','Pay at the gym','Before your first class']]).map(([k,l,s2],i)=>`<label class="opt"><input type="radio" name="pay" value="${k}" ${(d.pay?d.pay===k:i===0)?'checked':''}><div><div class="b">${l}</div><div class="small muted">${s2}</div></div></label>`).join('')}
-    <div class="notice"><span>🔒</span><div class="grow small">Prototype: no payment is taken here. In the live app this hands off to the provider's secure checkout. We never handle card numbers.</div></div>`}
+    ${window.HOW_LIVE?'':`<div class="lbl mt2">Pay by</div>`}${window.HOW_LIVE?'':(p.monthly?[['dd','Direct Debit','Monthly, via GoCardless'],['card','Card','Via Stripe']]:[['card','Card','Via Stripe'],['cash','Pay at the gym','Before your first class']]).map(([k,l,s2],i)=>`<label class="opt"><input type="radio" name="pay" value="${k}" ${(d.pay?d.pay===k:i===0)?'checked':''}><div><div class="b">${l}</div><div class="small muted">${s2}</div></div></label>`).join('')}
+    <div class="notice"><span>🔒</span><div class="grow small">${window.HOW_LIVE?'Next you\'ll go to Stripe\'s secure checkout to pay by card or Direct Debit. We never see or store your card or bank details.':'Prototype: no payment is taken here. In the live app this hands off to the provider\'s secure checkout. We never handle card numbers.'}</div></div>`}
   if(s===6){const p=plan(d.plan);b+=`<div class="lock"><div style="font-size:48px">🐺</div><h3>Welcome to the pack, ${esc(d.first)}</h3><div class="muted">${p.name} is active. ${d.flag?'A coach will check in with you about your health answers before your first session.':''}</div></div><button type="button" class="btn p block" data-a="joinDone">Book my first class</button>`}
-  if(s<6)b+=`<div class="foot">${s>0?'<button type="button" class="btn" data-a="joinBack">Back</button>':''}<button class="btn p block">${s===5?'Confirm & join':'Continue'}</button></div>`;
+  if(s<6)b+=`<div class="foot">${s>0?'<button type="button" class="btn" data-a="joinBack">Back</button>':''}<button class="btn p block">${s===5?(window.HOW_LIVE?'Continue to secure payment':'Confirm & join'):'Continue'}</button></div>`;
   return {title:s===6?'You\'re in':'Join House of Wolves',body:b+'</form>'};
 }
 function shPlan(mid){
   const m=member(mid||S.meId);
-  return {title:'Change plan',body:`<form data-f="plan"><input type="hidden" name="id" value="${m.id}">${PLANS.filter(p=>p.id!=='intro'||m.plan==='intro').map(p=>`<label class="opt"><input type="radio" name="plan" value="${p.id}" ${m.plan===p.id?'checked':''}><div><div class="b">${p.name}${m.plan===p.id?' <span class="chip">Current</span>':''}</div><div class="small muted">${p.desc}</div></div><div class="pr">${money(p.price)}<small>/${p.unit}</small></div></label>`).join('')}
+  return {title:'Change plan',body:`<form data-f="plan"><input type="hidden" name="id" value="${m.id}">${PLANS.filter(p=>p.id!=='intro'||m.plan==='intro'||(window.HOW_LIVE&&(m.status==='pending'||m.plan==='none'))).map(p=>`<label class="opt"><input type="radio" name="plan" value="${p.id}" ${m.plan===p.id?'checked':''}><div><div class="b">${p.name}${m.plan===p.id?' <span class="chip">Current</span>':''}</div><div class="small muted">${p.desc}</div></div><div class="pr">${money(p.price)}<small>/${p.unit}</small></div></label>`).join('')}
   <div class="tiny muted">Monthly plan changes take effect immediately and are prorated on your next payment.</div><div class="foot"><button class="btn p block">Confirm</button></div></form>`};
 }
 function shFreeze(mid){
@@ -898,8 +926,9 @@ function shTaster(prefill){
   return {title:'Free taster',body:`<form data-f="taster"><div class="g-ed"><label class="f"><span>Name</span><input name="name" required value="${esc(prefill?.name||'')}"></label><label class="f"><span>Mobile</span><input name="phone" type="tel" required></label></div>
   <label class="f"><span>Email</span><input name="email" type="email" required></label>
   <label class="f"><span>Interested in</span><select name="interest"><option>CrossFit</option><option>Hyrox</option></select></label>
-  <label class="f"><span>Taster class</span><select name="inst"><option value="">I'll arrange a time later</option>${opts.map(i=>`<option value="${i.id}">${fmtD(i.date)} ${i.time} · ${TYPES[i.type].name} (${bk(i.id).in.length}/${i.cap})</option>`).join('')}</select></label>
+  <label class="f"><span>Taster class</span><select name="inst"><option value="">I'll arrange a time later</option>${opts.map(i=>`<option value="${i.id}">${fmtD(i.date)} ${i.time} · ${TYPES[i.type].name}${window.HOW_LIVE?'':` (${bk(i.id).in.length}/${i.cap})`}</option>`).join('')}</select></label>
   <label class="f"><span>Experience</span><select name="exp"><option>Never tried it</option><option>Some gym experience</option><option>Ex-CrossFitter</option></select></label>
+  <label class="chk"><input type="checkbox" name="consent" required> Happy for the gym to contact me about this taster. See the <a href="privacy.html" target="_blank">privacy notice</a>.</label>
   <div class="foot"><button class="btn p block">Book taster</button></div></form>`};
 }
 
@@ -912,7 +941,7 @@ function vDash(){
   const intro=S.members.filter(m=>m.plan==='intro'&&daysBetween(T,introEnd(m))<=S.cfg.introRemind);
   const newL=S.leads.filter(l=>l.status==='new'||l.status==='attended');
   const series=[];for(let d=-13;d<=0;d++){const ds=ymd(add(t0(),d));let n=0;instancesFor(ds).forEach(i=>{const b=S.bookings[i.id];if(b)n+=b.checked.length});n+=S.og.filter(o=>o.date===ds&&(o.status==='in'||o.status==='done')).length;series.push({ds,v:n})}
-  let h=`<div class="row between wrap" style="margin-bottom:14px"><div><div class="muted small">${fmtD(T,{weekday:'long',day:'numeric',month:'long'})}</div><h2 style="font-size:34px;margin-top:4px">Dashboard</h2></div><button class="btn sm" data-a="tvOpen" data-d="${T}" data-t="wod">Launch TV whiteboard</button></div>`;
+  let h=`<div class="row between wrap" style="margin-bottom:14px"><div><div class="muted small">${fmtD(T,{weekday:'long',day:'numeric',month:'long'})}</div><h2 style="font-size:34px;margin-top:4px">Dashboard</h2></div><div class="row wrap">${window.HOW_LIVE?'<button class="btn sm" data-a="staffOpen">Open door</button>':''}<button class="btn sm" data-a="tvOpen" data-d="${T}" data-t="wod">Launch TV whiteboard</button></div></div>`;
   h+=`<div class="kpis">
    <div class="kpi"><div class="l">Active members</div><div class="v">${active}</div><div class="d">${S.members.filter(m=>m.status==='frozen').length} frozen</div></div>
    <div class="kpi"><div class="l">Monthly recurring</div><div class="v">${money(mrr())}</div><div class="d">+ packs & drop-ins</div></div>
@@ -1105,8 +1134,8 @@ function vSettings(){
    <label class="f"><span>Intro reminder (days before end)</span><input type="number" min="1" max="14" data-c="cfg" data-v="introRemind" value="${c.introRemind}"></label>
    <label class="f"><span>Default programming release</span><input type="time" data-c="cfg" data-v="release" value="${c.release}"></label></div>
    <label class="chk"><input type="checkbox" data-c="cfgB" data-v="autoPromote" ${c.autoPromote?'checked':''}> Automatically move people off the waitlist when a space opens</label></div>
-  <div class="card"><span class="lbl">Memberships</span>${PLANS.map(p=>`<div class="lbr"><div class="grow"><div class="b small">${p.name}</div><div class="tiny muted">${p.perWeek?p.perWeek+'/week · ':''}${p.pack?p.pack+' credits · '+p.valid+' days · ':''}${p.og?'Open Gym · ':''}${p.tracks.length===5?'All classes':p.tracks.map(t=>TYPES[t].name).join(', ')}</div></div><span class="b">${money(p.price)}</span></div>`).join('')}<div class="tiny muted mt">Taken from the current Classes & Membership page. Intro price is £100 less the £20 saving.</div></div>
-  <div class="card"><span class="lbl">Demo</span><div class="small ink2">Data is generated around today's date and saved in this browser.</div><button class="btn sm mt" data-a="reset">Reset demo data</button></div></div>`;
+  <div class="card"><span class="lbl">Memberships</span>${PLANS.map(p=>`<div class="lbr"><div class="grow"><div class="b small">${p.name}</div><div class="tiny muted">${p.perWeek?p.perWeek+'/week · ':''}${p.pack?p.pack+' credit'+(p.pack===1?'':'s')+' · '+p.valid+' days · ':''}${p.og?'Open Gym · ':''}${p.tracks.length===5?'All classes':p.tracks.map(t=>TYPES[t].name).join(', ')}</div></div><span class="b">${money(p.price)}</span></div>`).join('')}<div class="tiny muted mt">Taken from the current Classes & Membership page. Intro price is £100 less the £20 saving.</div></div>
+  ${window.HOW_LIVE&&window.Live?Live.settingsCards():`<div class="card"><span class="lbl">Demo</span><div class="small ink2">Data is generated around today's date and saved in this browser.</div><button class="btn sm mt" data-a="reset">Reset demo data</button></div>`}</div>`;
 }
 
 /* ============ TV ============ */
@@ -1135,6 +1164,7 @@ const ACT={
    cancelBk(d.v,S.meId);if(SH)closeSheet()},
  cancelGo:d=>{closeSheet();cancelBk(d.v,S.meId)},
  clsInfo:d=>sheet(shClass,d.v),
+ doorPass:()=>sheet(shPass),
  checkin:d=>{const b=bk(d.v);if(!b.checked.includes(S.meId))b.checked.push(S.meId);save();
    sheet(()=>({title:'Checked in',body:`<div class="qr">${qr(S.meId)}</div><div style="text-align:center"><h3 style="font-size:26px">You're in, ${esc(me().first)}</h3><div class="muted small">Show this at the door if asked.</div></div><div class="foot"><button class="btn p block" data-a="close">Let's go</button></div>`}));render()},
  upsell:d=>{toast(d.r+'. Change your plan in Me → Membership.');},
@@ -1210,7 +1240,7 @@ const ACT={
 const pending={};
 function confirmInline(k){if(pending[k]&&Date.now()-pending[k]<4000){delete pending[k];return true}pending[k]=Date.now();toast(k==='reset'?'Tap again to reset all demo data':'Unsaved changes. Tap again to discard.');return false}
 function kitStep(el,dlt){const f=el.closest('form');const k=el.dataset.k;const inp=f['kit_'+k];const v=Math.max(0,+inp.value+dlt);inp.value=v;f.querySelector(`[data-o="${k}"]`).textContent=v;ogLive(f)}
-function qr(seed){let h=0;for(const c of seed+'how')h=(h*31+c.charCodeAt(0))>>>0;const r=rng(h),n=21;let s=`<svg viewBox="0 0 ${n} ${n}" width="100%" height="100%" shape-rendering="crispEdges">`;
+function qr(seed){if(window.qrcode){try{const q=window.qrcode(0,'M');q.addData(String(seed));q.make();return q.createSvgTag({cellSize:4,margin:0,scalable:true});}catch(e){}}let h=0;for(const c of seed+'how')h=(h*31+c.charCodeAt(0))>>>0;const r=rng(h),n=21;let s=`<svg viewBox="0 0 ${n} ${n}" width="100%" height="100%" shape-rendering="crispEdges">`;
   const fin=(x,y)=>`<rect x="${x}" y="${y}" width="7" height="7" fill="#000"/><rect x="${x+1}" y="${y+1}" width="5" height="5" fill="#fff"/><rect x="${x+2}" y="${y+2}" width="3" height="3" fill="#000"/>`;
   for(let y=0;y<n;y++)for(let x=0;x<n;x++){if((x<8&&y<8)||(x>12&&y<8)||(x<8&&y>12))continue;if(r()<.5)s+=`<rect x="${x}" y="${y}" width="1" height="1" fill="#000"/>`}
   return s+fin(0,0)+fin(14,0)+fin(0,14)+'</svg>'}
@@ -1309,11 +1339,28 @@ let qT;document.addEventListener('input',e=>{const el=e.target;
   if(el.dataset.pd&&UI.pe){UI.pe.doc.release=el.value.replace('T',' ');UI.pe.dirty=true}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#tv').classList.contains('on'))ACT.tvClose();else if(SH)closeSheet()}});
 
+/* ============ DOOR PASS ============ */
+let passTimer=null;
+function loadQrLib(){return window.qrcode?Promise.resolve():new Promise(r=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';s.onload=r;s.onerror=r;document.head.appendChild(s)})}
+function shPass(){
+  const m=me();
+  return {title:'Door pass',body:`<div class="pass"><div class="muted small">${esc(m.name)} · ${esc(plan(m.plan).name)}</div><div class="qrbox" id="passQr"><span class="muted">Loading…</span></div><div class="ring"><i id="passRing" style="width:100%"></i></div><div class="tiny muted mt">Hold this up to the scanner at the door. It refreshes every 30 seconds, so screenshots won't work.</div>
+  ${window.HOW_LIVE?'<div class="foot"><button class="btn p block" data-a="openDoor">Open the door from here</button></div>':'<div class="tiny muted mt">Demo pass. In the live app the scanner checks your booking and opens the door.</div>'}</div>`,
+  mount:()=>{clearInterval(passTimer);let left=30;const draw=async()=>{await loadQrLib();let tok='HOW1.demo.'+Math.floor(Date.now()/1000);if(window.HOW_LIVE&&window.Live){try{tok=await Live.doorToken()}catch(e){$('#passQr').innerHTML=`<span class="small" style="color:#000">${esc(e.message)}</span>`;return}}const el=$('#passQr');if(el)el.innerHTML=qr(tok);left=30};draw();passTimer=setInterval(()=>{if(!$('#passQr')){clearInterval(passTimer);return}left--;const r=$('#passRing');if(r)r.style.width=(left/30*100)+'%';if(left<=0)draw()},1000)}};
+}
+
+/* ============ INSTALL PROMPT ============ */
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.HOW_INSTALL=e});
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+
 /* ============ INIT ============ */
+if(!window.HOW_LIVE){
 load();
 S.members.forEach(m=>{if(m.status==='frozen'&&m.frozenUntil&&m.frozenUntil<TODAY()){m.status='active';m.frozenUntil=null}});
 render();
 setInterval(()=>{if(!SH&&!document.activeElement.matches('input,textarea,select'))render()},60000);
+}
 </script>
+<script src="live.js"></script>
 </body>
 </html>
