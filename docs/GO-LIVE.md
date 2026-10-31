@@ -82,7 +82,7 @@ select cron.schedule('how-daily', '0 2 * * *', 'select public.daily_housekeeping
 
 This unfreezes members, marks no-shows, expires old credits, moves intro members to Unlimited, and deletes data on schedule.
 
-## 9. Door access (optional)
+## 9. Door buzzer (optional)
 
 See [door-access.md](door-access.md).
 

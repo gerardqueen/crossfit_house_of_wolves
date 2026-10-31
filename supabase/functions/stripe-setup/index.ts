@@ -1,7 +1,7 @@
 // One-click Stripe setup. Run once by the owner after adding STRIPE_SECRET_KEY.
 // Creates products and prices for every plan, the intro coupon, the customer portal and the webhook endpoint,
-// and generates the door secrets. Safe to run again (e.g. after a price change): it reuses what already exists.
-import { admin, caller, cors, fail, json, randomKey, getSecret, setSecret, stripe } from '../_shared/util.ts';
+// Safe to run again (e.g. after a price change): it reuses what already exists.
+import { admin, caller, cors, fail, json, getSecret, setSecret, stripe } from '../_shared/util.ts';
 
 const WEBHOOK_EVENTS = [
   'checkout.session.completed',
@@ -91,11 +91,7 @@ Deno.serve(async (req) => {
       report.push('Created Stripe webhook and stored its signing secret');
     }
 
-    // 5. door secrets
-    if (!(await getSecret(db, 'door_token_secret'))) { await setSecret(db, 'door_token_secret', randomKey()); report.push('Generated door QR signing key'); }
-    if (!(await getSecret(db, 'door_device_key'))) { await setSecret(db, 'door_device_key', randomKey(24)); report.push('Generated door scanner key'); }
-
-    // 6. remember where the app lives (for Stripe return links)
+    // 5. remember where the app lives (for Stripe return links)
     const origin = req.headers.get('origin');
     if (origin) await db.from('settings').update({ app_url: origin }).eq('id', 1).is('app_url', null);
 

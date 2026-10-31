@@ -1,50 +1,44 @@
-# Door access
+# Door buzzer
 
-Members open the app, tap **Door pass**, and show a QR code that changes every 30 seconds (so screenshots don't work).
-A tablet by the door scans it and the system decides whether to let them in.
+Members tap **Buzz me in** in the app. The system checks they're allowed in right now and standing at the gym,
+then tells the door plug-in to buzz the door open. There's no scanner or pass to show.
 
-## Who gets in
+## Who can buzz in
 
-Set in **Coach → Settings → Door access**:
+Set in **Coach → Settings → Door buzzer**:
 
-| Mode | Who's let in |
+| Setting | Who it lets in |
 |---|---|
-| Members booked into a class or Open Gym now | From 30 min before a class to 15 min after it starts, or 15 min before an Open Gym slot until it ends. Scanning also checks them in. |
+| Members booked into a class or Open Gym now | From 30 min before a class to 15 min after it starts, or 15 min before an Open Gym slot until it ends. Buzzing in also checks them in. |
 | Any active member | Anyone with an active membership (not frozen, not overdue) |
 | Staff only | Coaches and the owner |
 
-Coaches and the owner are always let in. Every attempt is logged for 90 days.
+Coaches and the owner can always buzz, and have **Buzz door** on the dashboard for letting people in from the desk.
+Repeated taps within 8 seconds don't buzz again. Every buzz, allowed or not, is logged for 90 days.
 
-## The scanner
+## Location check
 
-1. Any Android tablet or old phone with Chrome, mounted by the door, plugged in.
-2. Open `https://gerardqueen.github.io/crossfit_house_of_wolves/door.html`.
-3. In the app: **Coach → Settings → Door access → Scanner key**. Paste the key into the tablet once.
-4. Optional: a USB or Bluetooth QR scanner also works. It types the code into the page automatically.
+Stand at the door, open **Settings → Door buzzer → Use my current location**, and **Save**. From then on, members must be
+within the set distance (150 m by default, plus a little extra for poor GPS indoors) to buzz. The phone shares its location
+once per tap; only the result is stored. Until a location is saved, members can buzz from anywhere.
 
-The screen goes green with the member's name, or red with the reason (no booking, membership frozen, pass expired).
+## Plug-ins
 
-## Opening the lock
-
-Pick how the door actually unlocks:
-
-| Option | What you need | How it works |
+| Plug-in | What it needs | Notes |
 |---|---|---|
-| **Nothing** | Nothing | The tablet shows green or red; staff open the door. Good for day one. |
-| **Shelly relay** | A Shelly relay (e.g. Shelly Plus 1) wired to the maglock or strike by an electrician, connected to the Shelly Cloud | The system switches the relay on. Set the relay's **auto-off timer** to about 5 seconds in the Shelly app so the lock re-engages. Enter the cloud server, auth key (Shelly app → Settings → Authorization cloud key) and device ID. |
-| **Webhook** | Anything that can receive a web request: Home Assistant, Node-RED, Zapier/Make, or an access system with webhooks | The system POSTs `{ "event": "unlock", "member": "...", "reason": "...", "at": "..." }` with an `X-HOW-Signature` header (HMAC-SHA256 of the body, using the secret shown when you save). |
+| **Shelly relay** (e.g. Shelly Plus 1) | Wired across the door release or buzzer button by an electrician, connected to Shelly Cloud | Enter the cloud server and auth cloud key (Shelly app → Settings → Authorization cloud key) and the device ID. Set the relay's **auto-off timer** to about 5 seconds so the door locks again by itself. |
+| **SwitchBot Bot** | A SwitchBot Bot stuck on the existing door-release button, plus a SwitchBot Hub | Enter the token and secret (SwitchBot app → Profile → Preferences → tap App Version 10 times → Developer Options) and the Bot's device ID. No wiring needed. |
+| **Webhook** | Anything that accepts a web request: Home Assistant, Node-RED, IFTTT, Zapier/Make | The system POSTs `{"event":"buzz","member":"…","reason":"…","at":"…"}` with an `X-HOW-Signature` header (HMAC-SHA256 of the body, with the secret shown when you save). Use this for Tuya / Smart Life plugs through Home Assistant, or for an access-control system with webhooks. |
+| **None yet** | Nothing | Rules and logging work; nothing physically buzzes. Good for testing. |
 
-Use **Test unlock** in Settings to check it.
+Use **Test buzz** in Settings to check the wiring.
 
-Members can also tap **Open the door from here** on their pass, which follows the same rules. Staff have **Open door** on the dashboard.
+## Adding a different device
 
-## Adding another lock system
-
-Kisi, Salto KS, Paxton Net2 and similar systems have their own APIs. Add a case to
-`supabase/functions/door-access/unlock.ts` that calls the system's unlock endpoint, and add it to the provider list.
-The rest (passes, rules, logging, scanner) stays the same.
+Add a case to `supabase/functions/door-access/unlock.ts` that calls the device's API, and add it to the list in Settings.
+Everything else (rules, location check, logging) stays the same.
 
 ## Safety
 
-- The lock must fail safe (release on power loss or fire alarm) and have a manual exit. Use a qualified installer.
-- Keep a physical key or code for staff in case the internet is down.
+- The release must fail safe (unlock on power loss or fire alarm) and the door must open from inside without the app. Use a qualified installer.
+- Keep a key or keypad code for staff in case the internet or the plug-in is down.

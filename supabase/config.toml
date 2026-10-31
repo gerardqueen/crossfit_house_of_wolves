@@ -5,10 +5,8 @@ enabled = true
 sql_paths = ["./seed.sql"]
 
 # Supabase CLI settings for the edge functions.
-# Stripe and the door scanner call these functions without a user sign-in; they check their own secrets instead.
+# Stripe calls the webhook without a user sign-in; it checks Stripe's signature instead.
 
 [functions.stripe-webhook]
 verify_jwt = false
 
-[functions.door-access]
-verify_jwt = false

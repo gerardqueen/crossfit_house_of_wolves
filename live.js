@@ -297,8 +297,19 @@
     accent: act(async (d) => { await run(sb.from('settings').update({ accent: d.v }).eq('id', 1)); await refresh(); }),
     noLogo: act(async () => { await run(sb.from('settings').update({ logo_url: null }).eq('id', 1)); await refresh(); }),
     import: () => sheet(shImport),
-    openDoor: act(async () => { const r = await fn('door-access', { action: 'open' }); toast(r.allowed ? `Door opening. ${r.reason}.` : r.reason, r.allowed ? 'good' : 'bad'); }),
-    staffOpen: act(async () => { await fn('door-access', { action: 'staff-open' }); toast('Door opening', 'good'); }),
+    buzz: act(async () => {
+      toast('Checking you\'re at the gym…');
+      const loc = await getLocation();
+      const r = await fn('door-access', { action: 'buzz', ...(loc || {}) });
+      toast(r.allowed ? (r.reason === 'Already buzzing' ? 'Buzzing, push the door' : 'Door buzzing, push to open') : r.reason, r.allowed ? 'good' : 'bad');
+      if (r.allowed) setTimeout(() => refresh().catch(() => {}), 1500);
+    }),
+    staffOpen: act(async () => { const r = await fn('door-access', { action: 'staff-buzz' }); toast(r.allowed ? 'Door buzzing' : 'Plug-in error: ' + (r.reason || ''), r.allowed ? 'good' : 'bad'); }),
+    lvHere: act(async () => {
+      const loc = await getLocation(); if (!loc) throw new Error('Allow location access, then try again while you\'re at the gym');
+      UI.doorLoc = loc; const f = $('form[data-f=lvDoor]'); f.gym_lat.value = loc.lat.toFixed(6); f.gym_lng.value = loc.lng.toFixed(6);
+      $('#lvLoc').textContent = `Set to here (±${Math.round(loc.accuracy)} m). Press Save.`;
+    }),
     signOut: act(async () => { await sb.auth.signOut(); location.reload(); }),
     exportData: act(async () => {
       const data = await fn('account', { action: 'export' });
@@ -308,8 +319,7 @@
     deleteAccount: () => sheet(() => ({ title: 'Delete account', body: `<form data-f="lvDelete"><div class="ink2">This cancels any membership payments and permanently deletes your account, bookings, scores and health details. Payment records are kept for accounting, without your name.</div><label class="f"><span>Type DELETE to confirm</span><input name="confirm" autocomplete="off"></label><div class="foot"><button class="btn danger block">Delete my account</button></div></form>` })),
     install: async () => { if (window.HOW_INSTALL) { window.HOW_INSTALL.prompt(); window.HOW_INSTALL = null; render(); } },
     stripeSetup: act(async () => { toast('Setting up Stripe…'); const r = await fn('stripe-setup', {}); sheet(() => ({ title: `Stripe ready (${r.mode} mode)`, body: `<div class="list">${r.report.map((x) => `<div class="li small">✓ ${esc(x)}</div>`).join('')}</div><div class="foot"><button class="btn p block" data-a="close">Done</button></div>` })); await refresh(); }),
-    doorKey: act(async () => { const r = await fn('door-access', { action: 'device-key' }); sheet(() => ({ title: 'Scanner key', body: `<div class="small ink2">Open <b>door.html</b> on the tablet by the door and paste this key once. Keep it private: anyone with it can run a scanner.</div><div class="card mt" style="word-break:break-all;font-family:monospace">${esc(r.device_key || 'Run Stripe setup first to generate it')}</div>` })); }),
-    doorTest: act(async () => { const r = await fn('door-access', { action: 'test' }); toast(`Unlock test: ${r.unlock.ok ? 'sent' : 'failed'} (${r.unlock.detail || r.unlock.provider})`, r.unlock.ok ? 'good' : 'bad'); }),
+    doorTest: act(async () => { const r = await fn('door-access', { action: 'test' }); toast(`Test buzz: ${r.unlock.ok ? 'sent' : 'failed'} (${r.unlock.detail || r.unlock.provider})`, r.unlock.ok ? 'good' : 'bad'); }),
   });
 
   Object.assign(FORMS, {
@@ -409,9 +419,10 @@
       closeSheet(); toast(`Invite sent to ${f.email.value}`, 'good'); await refresh();
     }),
     lvDoor: act(async (f) => {
-      const body = { action: 'configure', provider: f.provider.value, door_mode: f.mode.value, door_webhook_url: f.url?.value || '', shelly_server: f.server?.value || '', shelly_auth_key: f.authkey?.value || '', shelly_device_id: f.device?.value || '', shelly_channel: f.channel?.value || '' };
+      const v = (n) => f[n]?.value || '';
+      const body = { action: 'configure', provider: v('provider'), door_mode: v('mode'), radius: v('radius'), gym_lat: v('gym_lat'), gym_lng: v('gym_lng'), door_webhook_url: v('url'), shelly_server: v('server'), shelly_auth_key: v('authkey'), shelly_device_id: v('device'), shelly_channel: v('channel'), switchbot_token: v('sbtoken'), switchbot_secret: v('sbsecret'), switchbot_device_id: v('sbdevice') };
       const r = await fn('door-access', body);
-      toast('Door settings saved', 'good');
+      UI.doorLoc = null; toast('Door settings saved', 'good');
       if (r.webhook_secret) sheet(() => ({ title: 'Webhook signing secret', body: `<div class="small ink2">Your receiver can check the X-HOW-Signature header (HMAC-SHA256 of the body) with this secret.</div><div class="card mt" style="word-break:break-all;font-family:monospace">${esc(r.webhook_secret)}</div>` }));
       await refresh();
     }),
@@ -438,7 +449,6 @@
   });
 
   /* ---------------- live-only screens ---------------- */
-  Live.doorToken = async () => (await fn('door-access', { action: 'token' })).token;
 
   Live.accountCard = function () {
     const m = me();
@@ -461,13 +471,19 @@
       <div class="small ink2">Creates the products and prices for every plan, the intro discount, the billing portal and the webhook. Run it once after adding your Stripe secret key, and again after changing a price.</div>
       <div class="row wrap mt">${PLANS.map((p) => `<span class="chip ${p.payable ? 'good' : 'warn'}">${esc(p.name)}${p.payable ? ' ✓' : ''}</span>`).join('')}</div>
       <button class="btn p mt" data-a="stripeSetup">${PLANS.every((p) => p.payable) ? 'Re-run Stripe setup' : 'Set up Stripe'}</button></div>
-    <div class="card"><span class="lbl">Door access</span><form data-f="lvDoor">
-      <label class="f"><span>Who can get in</span><select name="mode">${[['booked_only', 'Members booked into a class or Open Gym now'], ['active_members', 'Any active member'], ['off', 'Staff only']].map(([v, l]) => `<option value="${v}" ${st.door_mode === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-      <label class="f"><span>Unlock using</span><select name="provider" data-c="lvProvider">${[['none', 'Nothing (scanner shows yes/no, staff open)'], ['webhook', 'Webhook (Home Assistant, Node-RED, Zapier…)'], ['shelly_cloud', 'Shelly relay (Shelly Cloud)']].map(([v, l]) => `<option value="${v}" ${prov === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <div class="card"><span class="lbl">Door buzzer</span><form data-f="lvDoor">
+      <div class="small ink2">Members tap <b>Buzz me in</b> in the app. The system checks they're allowed in and at the gym, then the plug-in buzzes the door.</div>
+      <label class="f"><span>Who can buzz in</span><select name="mode">${[['booked_only', 'Members booked into a class or Open Gym now'], ['active_members', 'Any active member'], ['off', 'Staff only']].map(([v, l]) => `<option value="${v}" ${st.door_mode === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f"><span>Door plug-in</span><select name="provider" data-c="lvProvider">${[['none', 'None yet (log only)'], ['shelly_cloud', 'Shelly relay (Shelly Cloud)'], ['switchbot', 'SwitchBot Bot'], ['webhook', 'Other: webhook (Home Assistant, Smart Life via HA, IFTTT…)']].map(([v, l]) => `<option value="${v}" ${prov === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      ${prov === 'shelly_cloud' ? '<div class="g-ed"><label class="f"><span>Cloud server</span><input name="server" placeholder="https://shelly-xx-eu.shelly.cloud"></label><label class="f"><span>Auth cloud key</span><input name="authkey" placeholder="Leave blank to keep the saved one"></label><label class="f"><span>Device ID</span><input name="device"></label><label class="f"><span>Channel</span><input name="channel" value="0"></label></div><div class="tiny muted">In the Shelly app, set the relay\'s auto-off timer to about 5 seconds.</div>' : ''}
+      ${prov === 'switchbot' ? '<div class="g-ed"><label class="f"><span>Token</span><input name="sbtoken" placeholder="Leave blank to keep"></label><label class="f"><span>Secret</span><input name="sbsecret" placeholder="Leave blank to keep"></label><label class="f"><span>Bot device ID</span><input name="sbdevice"></label></div><div class="tiny muted">SwitchBot app: Profile > Preferences > tap App Version 10 times > Developer Options. Needs a SwitchBot Hub.</div>' : ''}
       ${prov === 'webhook' ? '<label class="f"><span>Webhook URL</span><input name="url" placeholder="https://… (leave blank to keep the saved one)"></label>' : ''}
-      ${prov === 'shelly_cloud' ? '<div class="g-ed"><label class="f"><span>Cloud server</span><input name="server" placeholder="https://shelly-xx-eu.shelly.cloud"></label><label class="f"><span>Auth key</span><input name="authkey" placeholder="Leave blank to keep"></label><label class="f"><span>Device ID</span><input name="device"></label><label class="f"><span>Channel</span><input name="channel" value="0"></label></div>' : ''}
-      <div class="row wrap"><button class="btn p">Save</button><button type="button" class="btn" data-a="doorKey">Scanner key</button><button type="button" class="btn" data-a="doorTest">Test unlock</button></div>
-      <div class="tiny muted mt">Put a tablet by the door with <a href="door.html" target="_blank">door.html</a> open. Members show the pass from their app.</div></form></div>
+      <div class="lbl mt2">Gym location</div>
+      <div class="small ink2" id="lvLoc">${UI.doorLoc ? `Set to here (±${Math.round(UI.doorLoc.accuracy)} m). Press Save.` : st.gym_lat != null ? `Saved (${Number(st.gym_lat).toFixed(4)}, ${Number(st.gym_lng).toFixed(4)}). Members must be within ${st.door_radius_m} m to buzz.` : 'Not set: members can buzz from anywhere. Stand at the door and tap the button below.'}</div>
+      <input type="hidden" name="gym_lat" value="${UI.doorLoc ? UI.doorLoc.lat.toFixed(6) : ''}"><input type="hidden" name="gym_lng" value="${UI.doorLoc ? UI.doorLoc.lng.toFixed(6) : ''}">
+      <div class="row wrap mt"><button type="button" class="btn" data-a="lvHere">Use my current location</button><label class="f" style="margin:0;width:150px"><span>Distance (m)</span><input type="number" name="radius" min="30" max="2000" value="${st.door_radius_m || 150}"></label></div>
+      <div class="row wrap mt"><button class="btn p">Save</button><button type="button" class="btn" data-a="doorTest">Test buzz</button></div>
+      <div class="tiny muted mt">Every buzz is logged for 90 days. Staff can buzz from the dashboard at any time.</div></form></div>
     <div class="card"><span class="lbl">Legal details (shown on the privacy notice and terms)</span><form data-f="lvLegal">
       <label class="f"><span>Business legal name</span><input name="legal" value="${esc(st.legal_name || '')}"></label>
       <label class="f"><span>ICO registration number</span><input name="ico" value="${esc(st.ico_number || '')}"></label>

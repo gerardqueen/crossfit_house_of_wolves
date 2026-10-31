@@ -39,7 +39,10 @@ create table if not exists settings (
   intro_remind_days int not null default 7,
   show_attendee_names boolean not null default true,
   door_mode text not null default 'booked_only' check (door_mode in ('booked_only','active_members','off')),
-  door_provider text not null default 'none' check (door_provider in ('none','webhook','shelly_cloud')),
+  door_provider text not null default 'none' check (door_provider in ('none','webhook','shelly_cloud','switchbot')),
+  gym_lat double precision,
+  gym_lng double precision,
+  door_radius_m int not null default 150,
   app_url text,
   updated_at timestamptz not null default now()
 );
@@ -715,10 +718,11 @@ begin
 end $$;
 
 
--- ---------------------------------------------------------------- door access (called by the door-access edge function only)
--- booked_only: a class starting within -15/+30 minutes or an Open Gym booking covering now; checks the member in.
+-- ---------------------------------------------------------------- door buzzer (called by the door-access edge function only)
+-- booked_only: from 30 min before a class to 15 min after it starts, or 15 min before an Open Gym slot until it ends;
+-- buzzing in also checks the member in.
 -- active_members: any active member. off: nobody but staff.
-create or replace function door_check(p_member uuid)
+create or replace function door_check(p_member uuid, p_method text default 'app')
 returns table(allowed boolean, reason text, display_name text)
 language plpgsql security definer set search_path = public as $$
 declare m profiles; s settings; b record; o record; nm text; now_l timestamp := local_now();
@@ -726,24 +730,24 @@ begin
   select * into m from profiles where id = p_member;
   select * into s from settings where id = 1;
   if m.id is null then
-    insert into access_log(member_id, allowed, reason, method) values (null, false, 'Unknown member', 'door');
+    insert into access_log(member_id, allowed, reason, method) values (null, false, 'Unknown member', p_method);
     return query select false, 'Unknown member', ''::text; return;
   end if;
   nm := trim(m.first_name || ' ' || m.last_name);
   if m.role in ('coach','owner') then
-    insert into access_log(member_id, allowed, reason, method) values (m.id, true, 'Staff', 'door');
+    insert into access_log(member_id, allowed, reason, method) values (m.id, true, 'Staff', p_method);
     return query select true, 'Staff', nm; return;
   end if;
   if s.door_mode = 'off' then
-    insert into access_log(member_id, allowed, reason, method) values (m.id, false, 'Door access off', 'door');
+    insert into access_log(member_id, allowed, reason, method) values (m.id, false, 'Door access off', p_method);
     return query select false, 'Door access is switched off', nm; return;
   end if;
   if m.status <> 'active' then
-    insert into access_log(member_id, allowed, reason, method) values (m.id, false, 'Membership ' || m.status, 'door');
+    insert into access_log(member_id, allowed, reason, method) values (m.id, false, 'Membership ' || m.status, p_method);
     return query select false, 'Membership is ' || m.status::text, nm; return;
   end if;
   if s.door_mode = 'active_members' then
-    insert into access_log(member_id, allowed, reason, method) values (m.id, true, 'Active member', 'door');
+    insert into access_log(member_id, allowed, reason, method) values (m.id, true, 'Active member', p_method);
     return query select true, 'Active member', nm; return;
   end if;
   select bk.* into b from bookings bk join timetable t on t.id = bk.timetable_id
@@ -752,7 +756,7 @@ begin
     limit 1;
   if b.id is not null then
     update bookings set status = 'attended', checked_in_at = coalesce(checked_in_at, now()) where id = b.id;
-    insert into access_log(member_id, allowed, reason, method) values (m.id, true, 'Class booking', 'door');
+    insert into access_log(member_id, allowed, reason, method) values (m.id, true, 'Class booking', p_method);
     return query select true, 'Class booking', nm; return;
   end if;
   select og.* into o from og_bookings og
@@ -761,10 +765,10 @@ begin
     limit 1;
   if o.id is not null then
     update og_bookings set status = 'in', in_at = coalesce(in_at, now()) where id = o.id;
-    insert into access_log(member_id, allowed, reason, method) values (m.id, true, 'Open Gym booking', 'door');
+    insert into access_log(member_id, allowed, reason, method) values (m.id, true, 'Open Gym booking', p_method);
     return query select true, 'Open Gym booking', nm; return;
   end if;
-  insert into access_log(member_id, allowed, reason, method) values (m.id, false, 'No booking now', 'door');
+  insert into access_log(member_id, allowed, reason, method) values (m.id, false, 'No booking now', p_method);
   return query select false, 'No class or Open Gym booking right now', nm;
 end $$;
 revoke all on function door_check from public, anon, authenticated;
